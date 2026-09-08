@@ -1,6 +1,6 @@
 # Luma — Liquid Glass Focus Dashboard
 
-Luma is a colorful personal-focus dashboard built as a non-music reinterpretation of the original liquid-glass interface. It combines frosted, translucent panels with animated lavender, cyan, peach, fuchsia, and amber liquid forms.
+Luma is a colorful personal-focus dashboard built around a frosted liquid-glass interface. It combines translucent panels with animated lavender, cyan, peach, fuchsia, and amber liquid forms.
 
 ![Luma dashboard preview](./screenshots/luma-dashboard.png)
 
