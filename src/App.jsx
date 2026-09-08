@@ -1,324 +1,42 @@
-import React, { useState, useEffect, useRef } from 'react';
-import Header from './components/Header.jsx';
-import LiquidBackground from './components/LiquidBackground.jsx';
-import NowPlayingCenter from './components/NowPlayingCenter.jsx';
-import SearchResults from './components/SearchResults.jsx';
-import PlayerBar from './components/PlayerBar.jsx';
-import QueueDrawer from './components/QueueDrawer.jsx';
-import { extractPastelPalette } from './utils/colorExtractor.js';
-import { AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, CirclePlus, Clock3, Command, Layers3, MoreHorizontal, Plus, Search, Sparkles, Target, Zap } from 'lucide-react';
+
+const projects = [
+  { name: 'Orbit website', progress: 74, color: 'bg-violet-400', members: ['AM', 'LK', 'YN'] },
+  { name: 'Field notes', progress: 46, color: 'bg-amber-300', members: ['JR', 'SK'] },
+  { name: 'Noma launch', progress: 91, color: 'bg-cyan-300', members: ['SP', 'MB', 'DT'] },
+];
+const initialTasks = [
+  { title: 'Map the onboarding flow', tag: 'Design', time: '10:00', done: true },
+  { title: 'Prepare the client walkthrough', tag: 'Review', time: '13:30', done: false },
+  { title: 'Write the launch update', tag: 'Writing', time: '16:00', done: false },
+];
 
 export default function App() {
-  const [searchQuery, setSearchQuery] = useState('Coldplay');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
+  const [tasks, setTasks] = useState(initialTasks);
+  const [notice, setNotice] = useState('');
+  const completed = tasks.filter((task) => task.done).length;
+  const toggleTask = (index) => setTasks((current) => current.map((task, taskIndex) => taskIndex === index ? { ...task, done: !task.done } : task));
+  const addTask = () => { setTasks((current) => [...current, { title: 'Sketch a new bright idea', tag: 'Personal', time: 'Tomorrow', done: false }]); setNotice('A fresh task was added to your day.'); window.setTimeout(() => setNotice(''), 2600); };
 
-  const [currentTrack, setCurrentTrack] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(30);
-  const [volume, setVolume] = useState(0.8);
-  const [isMuted, setIsMuted] = useState(false);
-
-  const [isShuffle, setIsShuffle] = useState(false);
-  const [isRepeat, setIsRepeat] = useState(false);
-  const [queue, setQueue] = useState([]);
-  const [isQueueOpen, setIsQueueOpen] = useState(false);
-
-  // Dynamic Pastel Mesh Color Palette
-  const [palette, setPalette] = useState({
-    primary: 'rgb(88, 80, 141)',
-    secondary: 'rgb(120, 105, 168)',
-    tertiary: 'rgb(62, 85, 120)',
-    glow: 'rgba(120, 105, 168, 0.45)',
-    rawHex: '#58508d',
-  });
-
-  const audioRef = useRef(null);
-
-  // Initialize Audio
-  useEffect(() => {
-    const audio = new Audio();
-    audioRef.current = audio;
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-    };
-
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration || 30);
-    };
-
-    const handleEnded = () => {
-      handleTrackEnd();
-    };
-
-    const handleError = (e) => {
-      console.warn('Audio playback error:', e);
-      setIsPlaying(false);
-    };
-
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
-
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-      audio.pause();
-    };
-  }, []);
-
-  // Update volume
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [volume, isMuted]);
-
-  // Perform search query via backend proxy
-  const executeSearch = async (query) => {
-    if (!query) return;
-    setIsLoading(true);
-    setErrorMessage(null);
-    setSearchQuery(query);
-
-    try {
-      // Backend Express endpoint
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.statusText}`);
-      }
-      const data = await response.json();
-      const tracks = data.data || [];
-      setSearchResults(tracks);
-
-      // If no track is currently playing, set the first result as currentTrack (paused)
-      if (!currentTrack && tracks.length > 0) {
-        selectTrack(tracks[0], false);
-      }
-    } catch (err) {
-      console.error('Search error:', err);
-      setErrorMessage('Could not fetch music from Deezer proxy. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Initial load: search "Coldplay"
-  useEffect(() => {
-    executeSearch('Coldplay');
-  }, []);
-
-  // When track changes: extract colors and set audio src
-  const selectTrack = async (track, shouldPlay = true) => {
-    if (!track) return;
-    setCurrentTrack(track);
-    setCurrentTime(0);
-
-    const coverUrl =
-      track.album?.cover_xl ||
-      track.album?.cover_big ||
-      track.album?.cover_medium ||
-      track.cover_xl ||
-      track.cover_medium;
-
-    // Asynchronously extract dominant color to pastel mesh gradient
-    extractPastelPalette(coverUrl).then((newPalette) => {
-      setPalette(newPalette);
-    });
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      if (track.preview) {
-        audioRef.current.src = track.preview;
-        audioRef.current.load();
-        if (shouldPlay) {
-          audioRef.current
-            .play()
-            .then(() => setIsPlaying(true))
-            .catch((err) => {
-              console.warn('Playback prevented by browser policy:', err);
-              setIsPlaying(false);
-            });
-        } else {
-          setIsPlaying(false);
-        }
-      }
-    }
-  };
-
-  const togglePlay = () => {
-    if (!audioRef.current || !currentTrack) return;
-
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch((err) => {
-          console.warn('Playback error:', err);
-          setIsPlaying(false);
-        });
-    }
-  };
-
-  const handleSeek = (newTime) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
-    }
-  };
-
-  const handleTrackEnd = () => {
-    if (isRepeat) {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(console.warn);
-      }
-      return;
-    }
-
-    if (queue.length > 0) {
-      const nextFromQueue = queue[0];
-      setQueue((prev) => prev.slice(1));
-      selectTrack(nextFromQueue, true);
-      return;
-    }
-
-    // Otherwise play next in search results
-    playNextTrack();
-  };
-
-  const playNextTrack = () => {
-    if (queue.length > 0) {
-      const next = queue[0];
-      setQueue((prev) => prev.slice(1));
-      selectTrack(next, true);
-      return;
-    }
-
-    if (!searchResults.length || !currentTrack) return;
-
-    if (isShuffle) {
-      const randomIndex = Math.floor(Math.random() * searchResults.length);
-      selectTrack(searchResults[randomIndex], true);
-      return;
-    }
-
-    const currentIndex = searchResults.findIndex((t) => t.id === currentTrack.id);
-    const nextIndex = (currentIndex + 1) % searchResults.length;
-    selectTrack(searchResults[nextIndex], true);
-  };
-
-  const playPrevTrack = () => {
-    if (!searchResults.length || !currentTrack) return;
-
-    // If played more than 3 seconds, restart current track
-    if (currentTime > 3) {
-      handleSeek(0);
-      return;
-    }
-
-    const currentIndex = searchResults.findIndex((t) => t.id === currentTrack.id);
-    const prevIndex = (currentIndex - 1 + searchResults.length) % searchResults.length;
-    selectTrack(searchResults[prevIndex], true);
-  };
-
-  const addToQueue = (track) => {
-    setQueue((prev) => [...prev, track]);
-  };
-
-  const removeFromQueue = (index) => {
-    setQueue((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const clearQueue = () => {
-    setQueue([]);
-  };
-
-  return (
-    <div className="min-h-screen relative flex flex-col justify-between selection:bg-white/20 selection:text-white pb-32">
-      {/* 1. Dynamic Liquid Mesh & Blob Background */}
-      <LiquidBackground palette={palette} />
-
-      {/* 2. Top Header & Glass Search Bar */}
-      <Header
-        onSearch={executeSearch}
-        isLoading={isLoading}
-        searchQuery={searchQuery}
-      />
-
-      {/* Error notification banner */}
-      {errorMessage && (
-        <div className="max-w-md mx-auto my-2 px-4 py-2.5 rounded-2xl glass-panel bg-rose-500/10 border-rose-400/30 text-rose-200 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {/* Main Interactive Stage */}
-      <main className="flex-1 flex flex-col items-center justify-start w-full">
-        {/* 3. Center Big Album Art with Blur Behind */}
-        <NowPlayingCenter
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          onTogglePlay={togglePlay}
-          palette={palette}
-          onAddToQueue={addToQueue}
-        />
-
-        {/* 4. Glass Cards Search Results with Stagger Animations */}
-        <SearchResults
-          results={searchResults}
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          onSelectTrack={(track) => selectTrack(track, true)}
-          onAddToQueue={addToQueue}
-          queue={queue}
-        />
+  return <div className="min-h-screen overflow-hidden px-4 py-5 text-slate-950 sm:px-8 lg:px-12">
+    <div className="liquid-background" aria-hidden="true"><i /><i /><i /></div>
+    <div className="mx-auto max-w-7xl">
+      <header className="glass-panel flex items-center justify-between rounded-[28px] px-5 py-3.5 sm:px-7">
+        <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-950 text-white shadow-lg"><Sparkles size={19} /></div><span className="text-lg font-semibold tracking-tight">Luma</span><span className="hidden rounded-full bg-white/45 px-3 py-1 text-xs font-medium text-slate-600 sm:block">Personal space</span></div>
+        <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex"><a className="text-slate-950" href="#today">Today</a><a href="#projects">Projects</a><a href="#insights">Insights</a></nav>
+        <div className="flex items-center gap-2"><button className="glass-button grid h-10 w-10 place-items-center rounded-xl" aria-label="Search"><Search size={18} /></button><button className="glass-button grid h-10 w-10 place-items-center rounded-xl" aria-label="Notifications"><Bell size={18} /></button><button className="ml-1 h-10 w-10 rounded-xl bg-gradient-to-br from-fuchsia-500 via-rose-400 to-amber-300 text-xs font-bold text-white shadow-md">YK</button></div>
+      </header>
+      <main className="grid gap-5 py-5 lg:grid-cols-[1.45fr_.85fr]">
+        <section className="glass-panel rounded-[32px] p-6 sm:p-9" id="today">
+          <div className="flex items-start justify-between"><div><p className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-600"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Tuesday, 8 September</p><h1 className="max-w-xl text-4xl font-semibold leading-[1.05] tracking-[-0.055em] sm:text-6xl">Make room for <span className="text-gradient">what matters.</span></h1></div><button className="glass-button hidden h-11 items-center gap-2 rounded-2xl px-4 text-sm font-semibold sm:flex"><CalendarDays size={17} /> September <ChevronDown size={15} /></button></div>
+          <div className="mt-9 grid gap-3 sm:grid-cols-3"><Stat icon={<Target size={19} />} label="Weekly focus" value="72%" detail="+8% from last week" color="bg-violet-100 text-violet-700" /><Stat icon={<Clock3 size={19} />} label="Deep work" value="4h 20m" detail="Your best rhythm" color="bg-cyan-100 text-cyan-700" /><Stat icon={<Zap size={19} />} label="Momentum" value="Great" detail="3-day streak" color="bg-amber-100 text-amber-700" /></div>
+          <div className="mt-8 rounded-[26px] border border-white/60 bg-white/30 p-4 sm:p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Today&apos;s flow</h2><p className="mt-0.5 text-sm text-slate-500">{completed} of {tasks.length} intentions complete</p></div><span className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white">{Math.round((completed / tasks.length) * 100)}%</span></div><div className="space-y-2">{tasks.map((task, index) => <button onClick={() => toggleTask(index)} key={`${task.title}-${index}`} className="group flex w-full items-center gap-3 rounded-2xl bg-white/55 p-3 text-left transition hover:-translate-y-0.5 hover:bg-white/85"><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${task.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check size={15} strokeWidth={3} /></span><span className={`flex-1 text-sm font-medium ${task.done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{task.title}</span><span className="hidden rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-500 sm:block">{task.tag}</span><span className="text-xs font-medium text-slate-400">{task.time}</span></button>)}</div><button onClick={addTask} className="mt-3 flex items-center gap-2 px-2 py-2 text-sm font-semibold text-slate-600 transition hover:text-slate-950"><CirclePlus size={18} /> Add an intention</button></div>
+        </section>
+        <aside className="space-y-5"><section className="glass-panel rounded-[32px] p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Your energy</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">A calm, clear day</h2></div><div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-amber-200 to-rose-300 text-xl shadow-sm">☀️</div></div><div className="mt-7 flex items-end gap-2">{[36, 52, 43, 72, 62, 90, 77].map((height, index) => <div key={height} className="flex-1"><div className={`rounded-full ${index === 5 ? 'bg-gradient-to-t from-fuchsia-500 to-rose-300' : 'bg-slate-950/10'}`} style={{ height }} /></div>)}</div><div className="mt-3 flex justify-between text-[11px] font-medium text-slate-400"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div></section>
+          <section className="glass-panel rounded-[32px] p-6" id="projects"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Layers3 size={19} /><h2 className="font-semibold">Active projects</h2></div><button className="glass-button grid h-8 w-8 place-items-center rounded-xl" aria-label="Add project"><Plus size={16} /></button></div><div className="mt-4 space-y-3">{projects.map((project) => <div key={project.name} className="rounded-2xl bg-white/45 p-3.5"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{project.name}</span><MoreHorizontal size={17} className="text-slate-400" /></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-950/10"><div className={`h-full rounded-full ${project.color}`} style={{ width: `${project.progress}%` }} /></div><div className="mt-3 flex items-center justify-between"><div className="flex -space-x-2">{project.members.map((member, index) => <span key={member} className="grid h-6 w-6 place-items-center rounded-full border-2 border-white text-[8px] font-bold" style={{ backgroundColor: ['#fbcfe8', '#bfdbfe', '#bbf7d0'][index] }}>{member}</span>)}</div><span className="text-xs font-medium text-slate-500">{project.progress}%</span></div></div>)}</div><button className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold text-slate-600 hover:bg-white/35">See all projects <ArrowUpRight size={15} /></button></section></aside>
       </main>
-
-      {/* 5. Fixed Liquid Glass Bottom Player Bar */}
-      <PlayerBar
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        volume={volume}
-        isMuted={isMuted}
-        isShuffle={isShuffle}
-        isRepeat={isRepeat}
-        queueCount={queue.length}
-        isQueueOpen={isQueueOpen}
-        onTogglePlay={togglePlay}
-        onSeek={handleSeek}
-        onVolumeChange={setVolume}
-        onToggleMute={() => setIsMuted(!isMuted)}
-        onNext={playNextTrack}
-        onPrev={playPrevTrack}
-        onToggleShuffle={() => setIsShuffle(!isShuffle)}
-        onToggleRepeat={() => setIsRepeat(!isRepeat)}
-        onToggleQueue={() => setIsQueueOpen(!isQueueOpen)}
-        palette={palette}
-      />
-
-      {/* 6. Slide-over Queue Drawer */}
-      <QueueDrawer
-        isOpen={isQueueOpen}
-        onClose={() => setIsQueueOpen(false)}
-        queue={queue}
-        currentTrack={currentTrack}
-        onPlayTrack={(track) => selectTrack(track, true)}
-        onRemoveFromQueue={removeFromQueue}
-        onClearQueue={clearQueue}
-      />
-    </div>
-  );
+      <section id="insights" className="glass-panel mb-3 flex flex-col justify-between gap-4 rounded-[26px] px-6 py-5 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/50 text-slate-700"><Command size={19} /></div><div><p className="font-semibold">A little nudge from Luma</p><p className="text-sm text-slate-500">Your clearest thinking happens before 11:30. Protect that window.</p></div></div><button className="glass-button whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold">Plan my focus</button></section>
+    </div>{notice && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white shadow-2xl">{notice}</div>}</div>;
 }
+function Stat({ icon, label, value, detail, color }) { return <div className="rounded-2xl bg-white/35 p-4"><div className={`grid h-9 w-9 place-items-center rounded-xl ${color}`}>{icon}</div><p className="mt-4 text-xs font-medium text-slate-500">{label}</p><p className="mt-0.5 text-xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-[11px] text-slate-500">{detail}</p></div>; }
